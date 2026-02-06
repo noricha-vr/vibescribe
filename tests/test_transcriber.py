@@ -346,8 +346,8 @@ class TestTranscriber:
     @patch("transcriber._load_user_dictionary")
     @patch("transcriber.genai.GenerativeModel")
     @patch("transcriber.genai.configure")
-    def test_init_injects_user_dictionary(self, mock_configure, mock_model_class, mock_load_dict):
-        """ユーザー辞書がシステムプロンプトへ注入されること。"""
+    def test_init_does_not_embed_user_dictionary_in_prompt(self, mock_configure, mock_model_class, mock_load_dict):
+        """辞書セクション削除後はユーザー辞書がプロンプトに埋め込まれないこと。"""
         mock_load_dict.return_value = (
             '\n<category name="ユーザー辞書（変換）">\n<term japanese="クロード" english="Claude" context="always"/>\n</category>',
             '\n<category name="ユーザー辞書（ヒント）" type="hint">\n<hint>Opus</hint>\n</category>',
@@ -357,10 +357,10 @@ class TestTranscriber:
 
         model_kwargs = mock_model_class.call_args.kwargs
         system_instruction = model_kwargs["system_instruction"]
-        assert "ユーザー辞書（変換）" in system_instruction
-        assert "ユーザー辞書（ヒント）" in system_instruction
-        assert "クロード" in system_instruction
-        assert "Opus" in system_instruction
+        assert "ユーザー辞書（変換）" not in system_instruction
+        assert "ユーザー辞書（ヒント）" not in system_instruction
+        assert "クロード" not in system_instruction
+        assert "Opus" not in system_instruction
 
     def test_model_constant(self):
         """モデル定数が正しいこと。"""

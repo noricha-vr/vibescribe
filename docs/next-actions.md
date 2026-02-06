@@ -47,6 +47,10 @@
   - 理由: カバレッジ測定が未設定
 
 ### P3: 低（将来的）
+- [ ] **辞書ローダーの整理** - Prompt辞書セクション削除後の `_load_user_dictionary` / 辞書注入経路を削除 or 再設計
+  - ファイル: `transcriber.py`, `postprocessor.py`, `tests/test_transcriber.py`, `tests/test_postprocessor.py`
+  - 理由: 現在は将来用に残るが、実行時の役割が薄くなっている
+
 - [ ] **postprocessor 互換レイヤの削除** - Gemini単段化が安定したら `main.py` から `PostProcessor` 呼び出しを撤去
   - ファイル: `main.py`, `postprocessor.py`, `tests/test_main.py`
   - 理由: 現在は移行互換のためパススルー実装が残っている

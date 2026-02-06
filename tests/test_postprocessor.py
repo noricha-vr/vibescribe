@@ -48,7 +48,7 @@ class TestPostProcessor:
     def test_system_prompt_still_available(self):
         """Transcriber で再利用するため SYSTEM_PROMPT を保持していること。"""
         assert "<instructions>" in SYSTEM_PROMPT
-        assert "<terminology>" in SYSTEM_PROMPT
+        assert "<terminology>" not in SYSTEM_PROMPT
 
 
 class TestLoadUserDictionary:
