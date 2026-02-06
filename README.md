@@ -1,20 +1,19 @@
-# voicecode
+# VibeScribe
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
 [![macOS](https://img.shields.io/badge/platform-macOS-lightgrey.svg)](https://www.apple.com/macos/)
 
-**エンジニアのための音声入力ツール**
+**Voice-to-text for developers on macOS** &mdash; press a hotkey, speak, and get correctly formatted text pasted into any app.
 
-Claude Code や Cursor などの AI コーディングツールに、音声で指示を出せます。
-一般的な音声認識ではプログラミング用語がカタカナや誤った漢字で出力されますが、VoiceCode は LLM で正しい表記に自動補正します。
+macOS 専用の音声入力ツール。ホットキーを押して話すだけで、プログラミング用語を正しい表記に補正してテキスト化します。Claude Code や Cursor などの AI コーディングツールへの音声指示に最適です。
 
-## 変換例
+## デモ: こんな変換ができます
 
-### カタカナ → 英語表記
+### カタカナ &rarr; 英語表記
 
-| 話した内容 | 音声認識 | VoiceCode |
-|-----------|---------|-----------|
+| 話した内容 | 一般的な音声認識 | VibeScribe |
+|-----------|-----------------|------------|
 | ユーズステート | ユーズステート | useState |
 | ドットエンブローカル | .円舞.ローカル | .env.local |
 | ドットギットイグノア | ..イグノア | .gitignore |
@@ -25,10 +24,10 @@ Claude Code や Cursor などの AI コーディングツールに、音声で�
 | スベルトキット | 滑るトキット | SvelteKit |
 | ネクストジェイエス | Next Chess | Next.js |
 
-### 同音異義語の修正
+### 同音異義語の補正
 
-| 話した内容 | 音声認識 | VoiceCode |
-|-----------|---------|-----------|
+| 話した内容 | 一般的な音声認識 | VibeScribe |
+|-----------|-----------------|------------|
 | イシューを立てて | 1週を立てて | Issueを立てて |
 | 上記のコードを参考に | 蒸気のコードを参考に | 上記のコードを参考に |
 | 機能を実装して | 昨日を実装して | 機能を実装して |
@@ -36,256 +35,158 @@ Claude Code や Cursor などの AI コーディングツールに、音声で�
 
 ## 特徴
 
-- **低コスト**: 月額約$1（約150円）で使い放題（1日100回×30日の場合）
-- **ワンキー操作**: F15（カスタマイズ可能）で録音開始/停止をトグル
-- **高速文字起こし**: Gemini Flash に音声を直接入力して高精度に文字起こし
-- **プログラミング用語の自動補正**: Gemini のプロンプトとユーザー辞書で技術用語を補正
-- **シームレスな入力**: 自動でクリップボードにコピー&貼り付け
-- **メニューバー常駐**: 状態アイコン（■/●/↻）で録音状態を確認
-- **効果音フィードバック**: 録音開始・停止・完了時に効果音でお知らせ
+- **ワンキー操作** &mdash; F15（カスタマイズ可能）で録音開始/停止をトグル
+- **高精度な文字起こし** &mdash; Gemini Flash に音声を直接入力し、プログラミング用語を自動補正
+- **シームレスな入力** &mdash; 文字起こし結果を自動でクリップボードにコピー & 貼り付け
+- **メニューバー常駐** &mdash; 状態アイコン（■ 待機 / ● 録音 / ↻ 処理中）で録音状態を確認
+- **効果音フィードバック** &mdash; 録音開始・停止・完了・エラー時に効果音でお知らせ
+- **低コスト** &mdash; 月額約 $1.4（約215円）で使い放題（1日100回 × 30日の場合）
 
-## コスト
+## 必要なもの
 
-| サービス | 用途 | 料金 |
-|----------|------|------|
-| Gemini Flash（自動選択） | 文字起こし + 用語補正 | Google の料金体系に準拠 |
-
-### 月額目安
-
-| 使用頻度 | 月額コスト |
-|----------|-----------|
-| 1日10回 | 約$0.10（約15円） |
-| 1日50回 | 約$0.50（約75円） |
-| 1日100回 | 約$1.00（約150円） |
-
-※ プロンプトキャッシングにより、入力トークンの大部分（約4,000トークン）は75%オフで計算されます。
+- macOS
+- Python 3.13+
+- Google AI Studio の API キー（[取得方法](docs/api-setup.md)）
 
 ## クイックスタート
 
-```bash
-# リポジトリをクローン
-git clone https://github.com/noricha-vr/voicecode.git
-cd voicecode
-
-# 依存関係をインストール
-uv sync
-
-# 起動（初回は API キーの入力を求められます）
-uv run python main.py
-```
-
-初回起動時に API キーを入力すると `~/.voicecode/.env` に保存されます。
-
-## インストール方法
-
-### pipx（推奨）
+### pipx でインストール（推奨）
 
 ```bash
-# pipx をインストール（まだの場合）
 brew install pipx
 pipx ensurepath
-
-# VoiceCode をインストール
-pipx install git+https://github.com/noricha-vr/voicecode.git
-
-# 起動
+pipx install git+https://github.com/noricha-vr/vibescribe.git
 voicecode
 ```
 
-### uv tool
+### uv で実行
 
 ```bash
-# uv をインストール（まだの場合）
 brew install uv
-
-# VoiceCode を実行
-uv tool run --from git+https://github.com/noricha-vr/voicecode.git voicecode
+uv tool run --from git+https://github.com/noricha-vr/vibescribe.git voicecode
 ```
 
-## セットアップ詳細
-
-### 1. 依存関係のインストール
+### ソースから実行
 
 ```bash
+git clone https://github.com/noricha-vr/vibescribe.git
+cd vibescribe
 uv sync
+uv run python main.py
 ```
-
-### 2. API キーの設定
 
 初回起動時に API キーの入力を求められます。入力した API キーは `~/.voicecode/.env` に自動保存されます。
 
-事前に設定したい場合は `~/.voicecode/.env` を作成:
+## macOS 権限の設定
 
-```bash
-mkdir -p ~/.voicecode
-cat > ~/.voicecode/.env << EOF
-GOOGLE_API_KEY=your_google_api_key
-# 任意: 利用モデルを固定したい場合
-# VOICECODE_GEMINI_MODEL=gemini-2.5-flash
-EOF
-```
+初回起動時にガイドが表示されます。システム設定 > プライバシーとセキュリティ で以下を許可してください。
 
-API キーの取得先:
-- Google AI Studio: https://aistudio.google.com/apikey
-- 詳細な取得手順: [docs/api-setup.md](docs/api-setup.md)
+| 項目 | 対象アプリ | 用途 |
+|------|-----------|------|
+| アクセシビリティ | ターミナル（または使用するターミナルアプリ） | ホットキー監視、キーボード入力 |
+| 入力監視 | ターミナル | ホットキー監視 |
+| マイク | ターミナル | 音声録音 |
 
-ホットキーはメニューバーの「ホットキー設定...」から変更できます。設定は `~/.voicecode/settings.json` に保存されます。
+## 使い方
+
+1. VibeScribe を起動する
+2. **F15** を押して録音開始（メニューバーのアイコンが ● に変わる）
+3. マイクに向かって話す
+4. **F15** を再度押して録音停止
+5. 文字起こし結果が自動で貼り付けられる
+
+終了: メニューバーから「終了」を選択、または Ctrl+C。
 
 ## 設定
 
-設定ファイル `~/.voicecode/settings.json` で以下の項目を設定できます。
+メニューバーの「ホットキー設定...」から変更できます。設定は `~/.voicecode/settings.json` に保存されます。
 
-```json
-{
-    "hotkey": "f15",
-    "restore_clipboard": true,
-    "max_recording_duration": 120
-}
-```
-
-| 設定項目 | 説明 | デフォルト値 |
-|----------|------|-------------|
+| 設定項目 | 説明 | デフォルト |
+|----------|------|-----------|
 | hotkey | 録音開始/停止のホットキー | f15 |
 | restore_clipboard | 貼り付け後にクリップボードを復元 | true |
 | max_recording_duration | 最大録音時間（秒、10-300） | 120 |
 
-### 3. macOS 権限の設定
+## コスト
 
-システム設定 > プライバシーとセキュリティ で以下を許可:
+Gemini 2.5 Flash の[公式料金](https://ai.google.dev/gemini-api/docs/pricing)をもとに、実際の利用データ（2,398回分）から算出しています。
 
-| 項目 | 対象アプリ |
-|------|-----------|
-| アクセシビリティ | ターミナル（または使用するターミナルアプリ） |
-| 入力監視 | ターミナル |
-| マイク | ターミナル |
+**1回あたりの内訳（平均録音時間 14.7 秒）**
 
-## 使い方
+| 項目 | トークン数 | 単価（/1M tokens） | コスト |
+|------|-----------|-------------------|--------|
+| システムプロンプト（キャッシュ） | 約 1,690 | $0.03 | $0.00005 |
+| 音声入力（14.7秒 × 25tokens/秒） | 約 368 | $1.00 | $0.00037 |
+| テキスト出力 | 約 20 | $2.50 | $0.00005 |
+| **合計** | | | **約 $0.0005** |
 
-```bash
-uv run python main.py
-```
+**月額目安**
 
-1. **録音開始**: F15 を押す（デフォルト、メニューバーから変更可能）
-2. **話す**: マイクに向かって話す
-3. **録音停止**: F15 を再度押す
-4. **自動処理**: 文字起こし（Gemini）→ 貼り付けが実行される
+| 使用頻度 | リクエスト数/月 | 月額目安 |
+|----------|---------------|---------|
+| 1日10回 | 300 | 約 $0.15（約22円） |
+| 1日50回 | 1,500 | 約 $0.72（約108円） |
+| 1日100回 | 3,000 | 約 $1.43（約215円） |
 
-終了するには Ctrl+C を押す。メニューバーから「終了」を選択しても停止できる。
+※ プロンプトキャッシング有効時の料金。無効の場合は約2倍。無料枠の利用でさらに安くなります。
 
-## 状態表示
+## トラブルシューティング
 
-メニューバーのアイコンで現在の状態を確認できます。
+| 症状 | 対処法 |
+|------|--------|
+| アクセシビリティの許可が必要エラー | システム設定 > アクセシビリティ でターミナルを許可 → ターミナル再起動 |
+| マイクが認識されない | システム設定 > マイク でターミナルを許可 |
+| ホットキーが反応しない | システム設定 > 入力監視 でターミナルを許可 |
+| 貼り付けが動作しない | アクセシビリティの許可を確認。一部アプリでは貼り付けがブロックされる場合あり |
+| API エラー | `~/.voicecode/.env` の API キーを確認 / API 利用制限を確認 / ネットワーク接続を確認 |
+| 音声が正しく認識されない | マイクに近づく / 静かな環境で使用 / はっきり発音 |
 
-| アイコン | 状態 |
-|----------|------|
-| ■ | 待機中（録音可能） |
-| ● | 録音中 |
-| ↻ | 処理中（文字起こし） |
-
-## 効果音
-
-| タイミング | 効果音 |
-|------------|--------|
-| 録音開始 | Tink |
-| 録音停止 | Pop |
-| 処理完了 | Glass |
-| エラー | Basso |
-
-## バックグラウンドで実行
-
-`-d` オプションでバックグラウンド起動できます。
-
-```bash
-uv run python main.py -d
-```
-
-ログは `~/.voicecode/voicecode.log` に出力されます。
-
-```bash
-tail -f ~/.voicecode/voicecode.log
-```
+<details>
+<summary>開発者向け情報</summary>
 
 ## アーキテクチャ
 
 ```
-┌─────────┐    ┌─────────┐    ┌─────────┐    ┌──────────┐
-│  録音   │ -> │ Gemini  │ -> │ 貼り付け │
-│ (音声) │    │ (文字)  │    │          │
-└─────────┘    └─────────┘    └──────────┘
-     |              |              |
-  pynput       Google API     pyautogui
- sounddevice                  pyperclip
+録音 (sounddevice) → Gemini Flash (文字起こし + 用語補正) → 貼り付け (pyautogui)
 ```
 
 ### 処理フロー
 
-1. **録音** (recorder.py): pynput でホットキーを監視、sounddevice で音声を録音
-2. **文字起こし** (transcriber.py): 利用可能な Gemini Flash モデルを自動選択して音声を直接テキスト化
+1. **録音** (recorder.py): pynput でホットキーを監視、sounddevice で WAV 16kHz モノラル録音
+2. **文字起こし** (transcriber.py): 利用可能な Gemini Flash モデルを自動選択し、音声を直接テキスト化
 3. **貼り付け** (main.py): pyperclip でクリップボードにコピー、pyautogui で Cmd+V
 
-## ファイル構成
+### ファイル構成
 
+| ファイル | 責務 |
+|----------|------|
+| main.py | エントリポイント、rumps メニューバーアプリ、ホットキー監視 |
+| recorder.py | 音声録音（WAV 16kHz モノラル） |
+| transcriber.py | Gemini Flash 文字起こし（モデル自動選択） |
+| postprocessor.py | 互換レイヤ（パススルー） |
+| settings.py | 設定管理 |
+| history.py | 履歴保存 |
+| overlay.py | 録音中オーバーレイ |
+
+### 開発コマンド
+
+```bash
+# テスト
+uv run pytest tests/
+
+# バックグラウンド起動
+uv run python main.py -d
+
+# ログ確認
+tail -f ~/.voicecode/voicecode.log
 ```
-voicecode/
-├── main.py           # エントリポイント、キーボード監視と統合処理
-├── recorder.py       # 音声録音モジュール
-├── transcriber.py    # Gemini Flash による文字起こし（モデル自動選択）
-├── postprocessor.py  # 互換用の後処理レイヤ（現在はパススルー）
-├── settings.py       # 設定管理
-├── pyproject.toml    # プロジェクト設定・依存関係
-├── .env.example      # 環境変数テンプレート
-├── LICENSE           # MITライセンス
-├── CONTRIBUTING.md   # 貢献ガイド
-└── README.md
-```
 
-## トラブルシューティング
+</details>
 
-### 「アクセシビリティの許可が必要」エラー
+## Contributing
 
-システム設定 > プライバシーとセキュリティ > アクセシビリティ でターミナルを許可する。
-許可後、ターミナルを再起動する。
+[CONTRIBUTING.md](CONTRIBUTING.md) を参照してください。
 
-### マイクが認識されない
+## License
 
-システム設定 > プライバシーとセキュリティ > マイク でターミナルを許可する。
-
-### ホットキーが反応しない
-
-システム設定 > プライバシーとセキュリティ > 入力監視 でターミナルを許可する。
-
-### 貼り付けが動作しない
-
-システム設定 > プライバシーとセキュリティ > アクセシビリティ の許可を確認する。
-一部のアプリケーションでは貼り付けがブロックされる場合がある。
-
-### API エラーが発生する
-
-- `~/.voicecode/.env` ファイルの API キーが正しく設定されているか確認
-- API の利用制限に達していないか確認
-- ネットワーク接続を確認
-
-### 音声が正しく認識されない
-
-- マイクに近づいて話す
-- 静かな環境で使用する
-- はっきりと発音する
-
-## 既知の課題（2026-02-06時点）
-
-- **文字起こしの待ち時間が長いことがある**
-  - 実測では `gemini-3-flash-preview` で約5〜9秒、`504 Deadline expired` の再試行時は10秒超になるケースあり
-  - 処理内訳では `Stop/Paste/PostProcess` は軽量で、ボトルネックは Gemini API 呼び出し
-
-- **Reasoning / Thinking Level の直接制御が未対応**
-  - 現在は `google.genai` へ移行済みで、`thinking_level=minimal` を使用
-  - ただしモデルごとに対応差があり、非対応モデルでは `thinking_budget=0` にフォールバック
-
-- **ログファイルの肥大化**
-  - ログは `~/.voicecode/voicecode.log` に追記され続けるため、長期運用で数GBまで増える
-  - ログローテーション（例: `RotatingFileHandler`）が未実装
-
-## 注意事項
-
-- 録音は最大120秒で自動停止します（設定で10-300秒に変更可能）
-- メニューバーから「終了」で停止できます
+[MIT](LICENSE)
