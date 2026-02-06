@@ -18,9 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 TRANSCRIBE_PROMPT = (
-    "この音声を日本語で文字起こししてください。"
-    "文脈を考慮して技術用語を正しい表記に修正し、"
-    "最終的な文字起こし結果のみを1-3行で返してください。"
+    "この音声を日本語で、省略せずに文字起こししてください。"
 )
 
 
@@ -253,11 +251,13 @@ class Transcriber:
             return genai_types.GenerateContentConfig(
                 cached_content=cached_content_name,
                 thinking_config=thinking_config,
+                temperature=0.0,
             )
 
         return genai_types.GenerateContentConfig(
             system_instruction=self._system_prompt,
             thinking_config=thinking_config,
+            temperature=0.0,
         )
 
     def _ensure_prompt_cache(self, model_name: str) -> None:
