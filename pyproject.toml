@@ -1,0 +1,57 @@
+[project]
+name = "voicecode"
+version = "0.1.0"
+description = "macOS用の音声入力ツール。ホットキーで録音→Gemini文字起こし→貼り付けを自動化"
+readme = "README.md"
+requires-python = ">=3.13"
+license = {text = "MIT"}
+authors = [{name = "noricha-vr"}]
+keywords = ["voice", "input", "speech-to-text", "macos", "programming", "transcription", "gemini"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
+]
+dependencies = [
+    "pynput>=1.7.6",
+    "sounddevice>=0.4.6",
+    "numpy>=1.24.0",
+    "groq>=0.4.0",
+    "openai>=1.0.0",
+    "pyperclip>=1.8.2",
+    "python-dotenv>=1.0.0",
+    "rumps>=0.4.0",
+    "google-generativeai>=0.8.6",
+]
+
+[project.urls]
+Homepage = "https://github.com/noricha-vr/voicecode"
+Repository = "https://github.com/noricha-vr/voicecode"
+Issues = "https://github.com/noricha-vr/voicecode/issues"
+
+[project.scripts]
+voicecode = "main:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build]
+# フラットレイアウト（src/ なし）のため、含めるモジュールを明示
+include = [
+  "main.py",
+  "recorder.py",
+  "transcriber.py",
+  "postprocessor.py",
+  "settings.py",
+  "overlay.py",
+  "history.py",
+]
