@@ -32,3 +32,6 @@ Thumbs.db
 
 # Private docs
 docs/distribution-strategy.md
+
+# Local launcher script
+run_vibescribe.command

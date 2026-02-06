@@ -7,6 +7,7 @@
 """
 
 import argparse
+import signal
 import sys
 
 if sys.platform != "darwin":
@@ -770,6 +771,40 @@ def _parse_args() -> argparse.Namespace:
     return args
 
 
+def _build_signal_handler(app: VoiceCodeApp):
+    """終了シグナル受信時のハンドラを生成する。"""
+
+    def _handle_signal(signum, _frame) -> None:
+        signal_name = signal.Signals(signum).name if signum in signal.Signals._value2member_map_ else str(signum)
+        print(f"\n[Info] Received {signal_name}. Shutting down...")
+
+        # バックグラウンド処理を先に停止してからアプリを終了する
+        if hasattr(app, "_timeout_timer"):
+            try:
+                app._timeout_timer.stop()
+            except Exception:
+                pass
+
+        if hasattr(app, "_listener"):
+            try:
+                app._listener.stop()
+            except Exception:
+                pass
+
+        if hasattr(app, "_overlay"):
+            try:
+                app._overlay.hide()
+            except Exception:
+                pass
+
+        try:
+            rumps.quit_application()
+        except Exception:
+            pass
+
+    return _handle_signal
+
+
 def main() -> None:
     """エントリポイント。"""
     args = _parse_args()
@@ -778,6 +813,9 @@ def main() -> None:
         _daemonize()
 
     app = VoiceCodeApp()
+    signal_handler = _build_signal_handler(app)
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
     app.run()
 
 

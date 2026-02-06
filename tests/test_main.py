@@ -11,6 +11,7 @@ from pynput import keyboard
 from main import (
     VoiceCodeApp,
     _StatusItemHelper,
+    _build_signal_handler,
     _daemonize,
     _format_hotkey,
     _parse_args,
@@ -1822,3 +1823,20 @@ class TestMainFunction:
         mock_daemonize.assert_called_once()
         mock_app_class.assert_called_once()
         mock_app.run.assert_called_once()
+
+
+class TestSignalHandler:
+    """シグナルハンドラのテスト。"""
+
+    @patch("main.rumps.quit_application")
+    def test_signal_handler_stops_resources_and_quits(self, mock_quit):
+        """SIGINT受信時にリソース停止と終了処理が呼ばれること。"""
+        app = MagicMock()
+        handler = _build_signal_handler(app)
+
+        handler(2, None)  # SIGINT
+
+        app._timeout_timer.stop.assert_called_once()
+        app._listener.stop.assert_called_once()
+        app._overlay.hide.assert_called_once()
+        mock_quit.assert_called_once()
