@@ -278,9 +278,8 @@ voicecode/
   - 処理内訳では `Stop/Paste/PostProcess` は軽量で、ボトルネックは Gemini API 呼び出し
 
 - **Reasoning / Thinking Level の直接制御が未対応**
-  - 現在の実装は `google.generativeai` (`0.8.6`) を使用
-  - このSDKでは `thinking_level=minimal` などの設定を `generation_config` に渡せない
-  - Thinking制御には `google.genai` への移行が必要
+  - 現在は `google.genai` へ移行済みで、`thinking_level=minimal` を使用
+  - ただしモデルごとに対応差があり、非対応モデルでは `thinking_budget=0` にフォールバック
 
 - **ログファイルの肥大化**
   - ログは `~/.voicecode/voicecode.log` に追記され続けるため、長期運用で数GBまで増える

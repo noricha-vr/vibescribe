@@ -5,15 +5,13 @@ import os
 import time
 from pathlib import Path
 
-import google.generativeai as genai
+import google.genai as genai
+import google.genai.types as genai_types
 
 # 設定
 AUDIO_FILE = Path.home() / ".voicecode/history/2026-02-03_114629.wav"
-MODEL = "gemini-2.0-flash"  # gemini-3.0-flash-preview if available
+MODEL = "gemini-3-flash-preview"
 NUM_TESTS = 3
-
-# APIキー設定
-genai.configure(api_key=os.environ.get("GOOGLE_API_KEY"))
 
 
 def test_audio_transcription(audio_path: Path, test_num: int) -> dict:
@@ -29,21 +27,26 @@ def test_audio_transcription(audio_path: Path, test_num: int) -> dict:
     results["file_read"] = time.time() - t0
     print(f"1. ファイル読み込み: {results['file_read']:.3f}s ({len(audio_data)/1024:.1f}KB)")
 
-    # 2. モデル初期化
+    # 2. クライアント初期化
     t1 = time.time()
-    model = genai.GenerativeModel(MODEL)
-    results["model_init"] = time.time() - t1
-    print(f"2. モデル初期化: {results['model_init']:.3f}s")
+    client = genai.Client(api_key=os.environ.get("GOOGLE_API_KEY"))
+    results["client_init"] = time.time() - t1
+    print(f"2. クライアント初期化: {results['client_init']:.3f}s")
 
     # 3. API呼び出し
     t2 = time.time()
-    response = model.generate_content([
-        "この音声を文字起こししてください。句読点を補完し、技術用語は正しい表記にしてください。文字起こし結果のみを返してください。",
-        {
-            "mime_type": "audio/wav",
-            "data": audio_data,
-        }
-    ])
+    response = client.models.generate_content(
+        model=MODEL,
+        contents=[
+            "この音声を文字起こししてください。句読点を補完し、技術用語は正しい表記にしてください。文字起こし結果のみを返してください。",
+            genai_types.Part.from_bytes(data=audio_data, mime_type="audio/wav"),
+        ],
+        config=genai_types.GenerateContentConfig(
+            thinking_config=genai_types.ThinkingConfig(
+                thinking_level=genai_types.ThinkingLevel.MINIMAL
+            ),
+        ),
+    )
     results["api_call"] = time.time() - t2
     print(f"3. API呼び出し: {results['api_call']:.3f}s")
 
@@ -62,6 +65,10 @@ def test_audio_transcription(audio_path: Path, test_num: int) -> dict:
 
 
 def main():
+    if not os.environ.get("GOOGLE_API_KEY"):
+        print("GOOGLE_API_KEY が未設定です。")
+        return
+
     if not AUDIO_FILE.exists():
         print(f"音声ファイルが見つかりません: {AUDIO_FILE}")
         return

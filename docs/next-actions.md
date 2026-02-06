@@ -26,13 +26,13 @@
   - ファイル: `pyproject.toml`, `uv.lock`
   - 理由: 互換期間中の暫定依存が残ると保守コストが上がる
 
-- [ ] **Gemini SDK移行** - `google.generativeai` から `google.genai` へ移行
-  - ファイル: `transcriber.py`, `scripts/test_gemini_audio.py`, `pyproject.toml`
-  - 理由: 現行SDKで FutureWarning（サポート終了）が出るため
-
 - [ ] **pytest収集範囲を固定** - `testpaths = ["tests"]` で `scripts/test_*.py` を誤収集しない
   - ファイル: `pyproject.toml`
   - 理由: 全体テストで実行用スクリプトが収集されるとCI/ローカル検証が不安定になる
+
+- [ ] **thinking設定の最適化** - モデル別に `thinking_level` / `thinking_budget` の最適値を計測して設定化
+  - ファイル: `transcriber.py`, `README.md`
+  - 理由: モデルごとの対応差により、設定次第で遅延が大きく変動するため
 
 - [ ] **Linting設定を追加** - pyproject.toml に ruff/black 設定を追加
   - ファイル: `pyproject.toml`

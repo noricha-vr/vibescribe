@@ -1,6 +1,6 @@
 """音声文字起こしモジュール。
 
-Gemini Flash に音声を直接入力して文字起こしする。
+Gemini API (google.genai) に音声を直接入力して文字起こしする。
 """
 
 import logging
@@ -9,9 +9,10 @@ import re
 import time
 from pathlib import Path
 
-import google.generativeai as genai
+import google.genai as genai
+import google.genai.types as genai_types
 
-from postprocessor import SYSTEM_PROMPT, _load_user_dictionary
+from postprocessor import SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,8 @@ class Transcriber:
 
     MODEL = "gemini-2.5-flash"
     MODEL_ENV_VAR = "VOICECODE_GEMINI_MODEL"
+    THINKING_LEVEL_ENV_VAR = "VOICECODE_THINKING_LEVEL"
+    DEFAULT_THINKING_LEVEL = "minimal"
     MODEL_ALIASES = {
         # 旧命名を受け取った場合でも実在モデルへ寄せる
         "gemini-3.0-flash": "gemini-3-flash-preview",
@@ -47,6 +50,13 @@ class Transcriber:
     MAX_TRANSIENT_RETRIES = 1
     RETRY_BACKOFF_SECONDS = 0.3
 
+    _THINKING_LEVEL_MAP = {
+        "minimal": genai_types.ThinkingLevel.MINIMAL,
+        "low": genai_types.ThinkingLevel.LOW,
+        "medium": genai_types.ThinkingLevel.MEDIUM,
+        "high": genai_types.ThinkingLevel.HIGH,
+    }
+
     def __init__(self, api_key: str | None = None):
         """Transcriberを初期化する。
 
@@ -60,33 +70,42 @@ class Transcriber:
         if not self._api_key:
             raise ValueError("GOOGLE_API_KEY is not set")
 
-        genai.configure(api_key=self._api_key)
+        self._client = self._create_client()
         self._system_prompt = self._build_system_prompt()
+        self._thinking_level = self._resolve_thinking_level()
+        self._thinking_mode = "level"  # level / budget0
+
         self._model_name = self._resolve_model_name()
-        self._model = self._create_model(self._model_name)
         logger.info(f"[Gemini] 使用モデル: {self._model_name}")
+        logger.info(f"[Gemini] Thinking mode: {self._thinking_mode} ({self._thinking_level.name})")
 
-    def _build_system_prompt(self) -> str:
-        """ユーザー辞書を注入したシステムプロンプトを構築する。"""
-        conversion_xml, hint_xml = _load_user_dictionary()
-        user_dict = conversion_xml + hint_xml
-        if not user_dict:
-            return SYSTEM_PROMPT
+    def _create_client(self):
+        """Gemini API クライアントを生成する。"""
+        return genai.Client(api_key=self._api_key)
 
-        return SYSTEM_PROMPT.replace(
-            "</terminology>",
-            f"{user_dict}\n</terminology>",
+    @staticmethod
+    def _build_system_prompt() -> str:
+        """システムプロンプトを構築する。"""
+        return SYSTEM_PROMPT
+
+    def _resolve_thinking_level(self) -> genai_types.ThinkingLevel:
+        """Thinking level 設定を解決する。"""
+        raw_level = os.getenv(self.THINKING_LEVEL_ENV_VAR, self.DEFAULT_THINKING_LEVEL).strip().lower()
+        level = self._THINKING_LEVEL_MAP.get(raw_level)
+        if level:
+            return level
+
+        logger.warning(
+            f"[Gemini] 無効な thinking level のため {self.DEFAULT_THINKING_LEVEL} を使用します: {raw_level}"
         )
+        return self._THINKING_LEVEL_MAP[self.DEFAULT_THINKING_LEVEL]
 
     @staticmethod
     def _extract_response_text(response: object) -> str:
         """Geminiレスポンスからテキストを抽出する。"""
-        try:
-            direct_text = getattr(response, "text", "")
-            if isinstance(direct_text, str) and direct_text:
-                return direct_text
-        except Exception:
-            pass
+        direct_text = getattr(response, "text", "")
+        if isinstance(direct_text, str) and direct_text:
+            return direct_text
 
         candidates = getattr(response, "candidates", None)
         if not candidates:
@@ -127,12 +146,16 @@ class Transcriber:
 
         return candidates
 
+    def _client_list_models(self):
+        """利用可能モデル一覧を取得する。"""
+        return list(self._client.models.list())
+
     def _list_available_models(self) -> list[str]:
         """generateContent に対応した利用可能モデル名一覧を返す。"""
         available_models: list[str] = []
-        for model in genai.list_models():
-            methods = getattr(model, "supported_generation_methods", None) or []
-            if "generateContent" not in methods:
+        for model in self._client_list_models():
+            actions = getattr(model, "supported_actions", None) or []
+            if "generateContent" not in actions:
                 continue
 
             model_name = getattr(model, "name", "")
@@ -176,13 +199,6 @@ class Transcriber:
 
         return ""
 
-    def _create_model(self, model_name: str) -> genai.GenerativeModel:
-        """Geminiクライアントを作成する。"""
-        return genai.GenerativeModel(
-            model_name=model_name,
-            system_instruction=self._system_prompt,
-        )
-
     @staticmethod
     def _is_model_not_found_error(error: Exception) -> bool:
         """モデル未検出エラーかどうか判定する。"""
@@ -206,15 +222,39 @@ class Transcriber:
         has_http_hint = bool(re.search(r"\b(429|500|502|503|504)\b", message)) or "too many requests" in message
         return any(pattern in message for pattern in transient_patterns) or has_http_hint
 
-    def _generate_content(self, audio_data: bytes) -> object:
-        """Gemini generate_content を呼び出す。"""
-        return self._model.generate_content(
-            [
-                TRANSCRIBE_PROMPT,
-                {"mime_type": "audio/wav", "data": audio_data},
-            ],
-            request_options={"timeout": self.TIMEOUT},
+    @staticmethod
+    def _is_thinking_level_unsupported_error(error: Exception) -> bool:
+        """thinking_level 非対応エラーかどうか判定する。"""
+        message = str(error).lower()
+        return "thinking level is not supported" in message
+
+    def _build_generate_config(self) -> genai_types.GenerateContentConfig:
+        """generate_content 用の設定を組み立てる。"""
+        if self._thinking_mode == "level":
+            thinking_config = genai_types.ThinkingConfig(thinking_level=self._thinking_level)
+        else:
+            # thinking_level 非対応モデル向けフォールバック
+            thinking_config = genai_types.ThinkingConfig(thinking_budget=0)
+
+        return genai_types.GenerateContentConfig(
+            system_instruction=self._system_prompt,
+            thinking_config=thinking_config,
         )
+
+    def _client_generate_content(self, model: str, audio_data: bytes) -> object:
+        """Gemini generate_content を呼び出す。"""
+        return self._client.models.generate_content(
+            model=model,
+            contents=[
+                TRANSCRIBE_PROMPT,
+                genai_types.Part.from_bytes(data=audio_data, mime_type="audio/wav"),
+            ],
+            config=self._build_generate_config(),
+        )
+
+    def _generate_content(self, audio_data: bytes) -> object:
+        """現在のモデルで文字起こしを実行する。"""
+        return self._client_generate_content(self._model_name, audio_data)
 
     def _generate_content_with_retry(self, audio_data: bytes) -> object:
         """一時的なAPIエラー時に短いリトライを行う。"""
@@ -224,6 +264,12 @@ class Transcriber:
                 return self._generate_content(audio_data)
             except Exception as e:
                 last_error = e
+
+                if self._thinking_mode == "level" and self._is_thinking_level_unsupported_error(e):
+                    self._thinking_mode = "budget0"
+                    logger.warning("[Gemini] thinking_level 非対応モデルのため thinking_budget=0 に切替します")
+                    return self._generate_content(audio_data)
+
                 if not self._is_transient_api_error(e) or attempt >= self.MAX_TRANSIENT_RETRIES:
                     raise
 
@@ -233,23 +279,11 @@ class Transcriber:
                 )
                 time.sleep(wait_seconds)
 
-        # 到達不可だが型チェッカ向けに明示
         assert last_error is not None
         raise last_error
 
     def transcribe(self, audio_path: Path) -> tuple[str, float]:
-        """音声ファイルを文字起こしする。
-
-        Args:
-            audio_path: 音声ファイルのパス。
-
-        Returns:
-            文字起こし結果のテキストと処理時間（秒）のタプル。
-            APIエラー時は空文字列と経過時間を返す。
-
-        Raises:
-            FileNotFoundError: 音声ファイルが存在しない場合。
-        """
+        """音声ファイルを文字起こしする。"""
         if not audio_path.exists():
             raise FileNotFoundError(f"Audio file not found: {audio_path}")
 
@@ -261,7 +295,6 @@ class Transcriber:
         try:
             response = self._generate_content_with_retry(audio_data)
         except Exception as e:
-            # API側のモデル差し替え・廃止、または一時エラー時は利用可能モデルへ1回だけ自動切替して再試行する
             if self._is_model_not_found_error(e) or self._is_transient_api_error(e):
                 fallback_model = self._resolve_model_name(exclude={self._model_name})
                 if fallback_model:
@@ -275,7 +308,6 @@ class Transcriber:
                     )
                     try:
                         self._model_name = fallback_model
-                        self._model = self._create_model(self._model_name)
                         response = self._generate_content_with_retry(audio_data)
                     except Exception as retry_error:
                         elapsed = time.time() - start_time

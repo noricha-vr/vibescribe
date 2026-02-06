@@ -6,26 +6,15 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+import google.genai.types as genai_types
 
 from transcriber import TRANSCRIBE_PROMPT, Transcriber
 
 
-def _mock_model_info(name: str, methods: list[str] | None = None) -> MagicMock:
-    """list_models 用のモデル情報モックを作る。"""
-    model = MagicMock()
-    model.name = name if name.startswith("models/") else f"models/{name}"
-    model.supported_generation_methods = methods or ["generateContent"]
-    return model
-
-
-@pytest.fixture(autouse=True)
-def mock_list_models():
-    """外部APIへ出ないよう list_models の既定値をモックする。"""
-    with patch(
-        "transcriber.genai.list_models",
-        return_value=[_mock_model_info(Transcriber.MODEL)],
-    ):
-        yield
+class _MockModel:
+    def __init__(self, name: str, actions: list[str] | None = None):
+        self.name = name if name.startswith("models/") else f"models/{name}"
+        self.supported_actions = actions or ["generateContent"]
 
 
 class TestTranscriber:
@@ -37,50 +26,49 @@ class TestTranscriber:
             with pytest.raises(ValueError, match="GOOGLE_API_KEY is not set"):
                 Transcriber()
 
-    @patch("transcriber._load_user_dictionary", return_value=("", ""))
-    @patch("transcriber.genai.GenerativeModel")
-    @patch("transcriber.genai.configure")
-    def test_init_with_api_key(self, mock_configure, mock_model_class, mock_load_dict):
+    @patch("transcriber.Transcriber._create_client")
+    @patch("transcriber.Transcriber._client_list_models")
+    def test_init_with_api_key(self, mock_list_models, mock_create_client):
         """APIキーで初期化できること。"""
-        Transcriber(api_key="test_key")
-        mock_configure.assert_called_once_with(api_key="test_key")
-        mock_model_class.assert_called_once()
+        mock_create_client.return_value = MagicMock()
+        mock_list_models.return_value = [_MockModel(Transcriber.MODEL)]
 
-        model_kwargs = mock_model_class.call_args.kwargs
-        assert model_kwargs["model_name"] == Transcriber.MODEL
-        assert "<instructions>" in model_kwargs["system_instruction"]
+        tr = Transcriber(api_key="test_key")
 
-    @patch("transcriber._load_user_dictionary", return_value=("", ""))
-    @patch("transcriber.genai.GenerativeModel")
-    @patch("transcriber.genai.configure")
-    def test_init_with_env_var(self, mock_configure, mock_model_class, mock_load_dict):
+        mock_create_client.assert_called_once()
+        assert tr._model_name == Transcriber.MODEL
+        assert "<instructions>" in tr._system_prompt
+
+    @patch("transcriber.Transcriber._create_client")
+    @patch("transcriber.Transcriber._client_list_models")
+    def test_init_with_env_var(self, mock_list_models, mock_create_client):
         """環境変数からAPIキーを取得できること。"""
-        with patch.dict("os.environ", {"GOOGLE_API_KEY": "env_key"}):
-            Transcriber()
-            mock_configure.assert_called_once_with(api_key="env_key")
+        mock_create_client.return_value = MagicMock()
+        mock_list_models.return_value = [_MockModel(Transcriber.MODEL)]
 
-    @patch("transcriber._load_user_dictionary", return_value=("", ""))
-    @patch("transcriber.genai.GenerativeModel")
-    @patch("transcriber.genai.configure")
-    def test_init_prefers_preview_model_when_available(self, mock_configure, mock_model_class, mock_load_dict):
+        with patch.dict("os.environ", {"GOOGLE_API_KEY": "env_key"}, clear=True):
+            tr = Transcriber()
+
+        assert tr._api_key == "env_key"
+
+    @patch("transcriber.Transcriber._create_client")
+    @patch("transcriber.Transcriber._client_list_models")
+    def test_init_prefers_preview_model_when_available(self, mock_list_models, mock_create_client):
         """利用可能なら Gemini 3 preview を優先選択すること。"""
-        with patch(
-            "transcriber.genai.list_models",
-            return_value=[
-                _mock_model_info("gemini-3-flash-preview"),
-                _mock_model_info("gemini-2.5-flash"),
-            ],
-        ):
-            Transcriber(api_key="test_key")
+        mock_create_client.return_value = MagicMock()
+        mock_list_models.return_value = [_MockModel("gemini-3-flash-preview"), _MockModel("gemini-2.5-flash")]
 
-        model_kwargs = mock_model_class.call_args.kwargs
-        assert model_kwargs["model_name"] == "gemini-3-flash-preview"
+        tr = Transcriber(api_key="test_key")
 
-    @patch("transcriber._load_user_dictionary", return_value=("", ""))
-    @patch("transcriber.genai.GenerativeModel")
-    @patch("transcriber.genai.configure")
-    def test_init_uses_model_env_var_when_available(self, mock_configure, mock_model_class, mock_load_dict):
+        assert tr._model_name == "gemini-3-flash-preview"
+
+    @patch("transcriber.Transcriber._create_client")
+    @patch("transcriber.Transcriber._client_list_models")
+    def test_init_uses_model_env_var_when_available(self, mock_list_models, mock_create_client):
         """VOICECODE_GEMINI_MODEL が利用可能なら優先されること。"""
+        mock_create_client.return_value = MagicMock()
+        mock_list_models.return_value = [_MockModel("gemini-3-flash-preview"), _MockModel("gemini-2.0-flash")]
+
         with patch.dict(
             "os.environ",
             {
@@ -89,23 +77,17 @@ class TestTranscriber:
             },
             clear=True,
         ):
-            with patch(
-                "transcriber.genai.list_models",
-                return_value=[
-                    _mock_model_info("gemini-3-flash-preview"),
-                    _mock_model_info("gemini-2.0-flash"),
-                ],
-            ):
-                Transcriber()
+            tr = Transcriber()
 
-        model_kwargs = mock_model_class.call_args.kwargs
-        assert model_kwargs["model_name"] == "gemini-2.0-flash"
+        assert tr._model_name == "gemini-2.0-flash"
 
-    @patch("transcriber._load_user_dictionary", return_value=("", ""))
-    @patch("transcriber.genai.GenerativeModel")
-    @patch("transcriber.genai.configure")
-    def test_init_normalizes_legacy_model_name(self, mock_configure, mock_model_class, mock_load_dict):
+    @patch("transcriber.Transcriber._create_client")
+    @patch("transcriber.Transcriber._client_list_models")
+    def test_init_normalizes_legacy_model_name(self, mock_list_models, mock_create_client):
         """gemini-3.0-flash 指定時は互換モデル名へ正規化すること。"""
+        mock_create_client.return_value = MagicMock()
+        mock_list_models.side_effect = RuntimeError("network error")
+
         with patch.dict(
             "os.environ",
             {
@@ -114,32 +96,76 @@ class TestTranscriber:
             },
             clear=True,
         ):
-            with patch("transcriber.genai.list_models", side_effect=RuntimeError("network error")):
-                Transcriber()
+            tr = Transcriber()
 
-        model_kwargs = mock_model_class.call_args.kwargs
-        assert model_kwargs["model_name"] == "gemini-3-flash-preview"
+        assert tr._model_name == "gemini-3-flash-preview"
 
-    @patch("transcriber._load_user_dictionary", return_value=("", ""))
-    @patch("transcriber.genai.GenerativeModel")
-    @patch("transcriber.genai.configure")
-    def test_transcribe_file_not_found(self, mock_configure, mock_model_class, mock_load_dict):
+    @patch("transcriber.Transcriber._create_client")
+    @patch("transcriber.Transcriber._client_list_models")
+    def test_invalid_thinking_level_falls_back_to_default(self, mock_list_models, mock_create_client):
+        """無効な thinking level は minimal にフォールバックすること。"""
+        mock_create_client.return_value = MagicMock()
+        mock_list_models.return_value = [_MockModel(Transcriber.MODEL)]
+
+        with patch.dict(
+            "os.environ",
+            {
+                "GOOGLE_API_KEY": "env_key",
+                "VOICECODE_THINKING_LEVEL": "invalid-level",
+            },
+            clear=True,
+        ):
+            tr = Transcriber()
+
+        assert tr._thinking_level == genai_types.ThinkingLevel.MINIMAL
+
+    @patch("transcriber.Transcriber._create_client")
+    @patch("transcriber.Transcriber._client_list_models")
+    def test_build_generate_config_uses_thinking_level(self, mock_list_models, mock_create_client):
+        """デフォルトは thinking_level 設定で構成されること。"""
+        mock_create_client.return_value = MagicMock()
+        mock_list_models.return_value = [_MockModel(Transcriber.MODEL)]
+
+        tr = Transcriber(api_key="test_key")
+        cfg = tr._build_generate_config()
+
+        assert cfg.system_instruction
+        assert cfg.thinking_config.thinking_level == genai_types.ThinkingLevel.MINIMAL
+
+    @patch("transcriber.Transcriber._create_client")
+    @patch("transcriber.Transcriber._client_list_models")
+    def test_build_generate_config_uses_budget0_in_fallback_mode(self, mock_list_models, mock_create_client):
+        """thinking fallback モードでは thinking_budget=0 を使うこと。"""
+        mock_create_client.return_value = MagicMock()
+        mock_list_models.return_value = [_MockModel(Transcriber.MODEL)]
+
+        tr = Transcriber(api_key="test_key")
+        tr._thinking_mode = "budget0"
+        cfg = tr._build_generate_config()
+
+        assert cfg.thinking_config.thinking_budget == 0
+
+    @patch("transcriber.Transcriber._create_client")
+    @patch("transcriber.Transcriber._client_list_models")
+    def test_transcribe_file_not_found(self, mock_list_models, mock_create_client):
         """存在しないファイルでエラーが発生すること。"""
+        mock_create_client.return_value = MagicMock()
+        mock_list_models.return_value = [_MockModel(Transcriber.MODEL)]
+
         transcriber = Transcriber(api_key="test_key")
 
         with pytest.raises(FileNotFoundError):
             transcriber.transcribe(Path("/nonexistent/file.wav"))
 
-    @patch("transcriber._load_user_dictionary", return_value=("", ""))
-    @patch("transcriber.genai.GenerativeModel")
-    @patch("transcriber.genai.configure")
-    def test_transcribe_success(self, mock_configure, mock_model_class, mock_load_dict):
+    @patch("transcriber.Transcriber._create_client")
+    @patch("transcriber.Transcriber._client_list_models")
+    def test_transcribe_success(self, mock_list_models, mock_create_client):
         """正常に文字起こしできること。"""
-        mock_model = MagicMock()
-        mock_model_class.return_value = mock_model
+        mock_create_client.return_value = MagicMock()
+        mock_list_models.return_value = [_MockModel(Transcriber.MODEL)]
+
         mock_response = MagicMock()
         mock_response.text = "テスト結果"
-        mock_model.generate_content.return_value = mock_response
 
         transcriber = Transcriber(api_key="test_key")
 
@@ -148,28 +174,25 @@ class TestTranscriber:
             temp_path = Path(f.name)
 
         try:
-            result, elapsed = transcriber.transcribe(temp_path)
+            with patch.object(transcriber, "_generate_content_with_retry", return_value=mock_response) as mock_gen:
+                result, elapsed = transcriber.transcribe(temp_path)
+
             assert result == "テスト結果"
             assert isinstance(elapsed, float)
             assert elapsed >= 0
-            mock_model.generate_content.assert_called_once()
-
-            call_args = mock_model.generate_content.call_args
-            assert call_args.args[0][0] == TRANSCRIBE_PROMPT
-            assert call_args.kwargs["request_options"] == {"timeout": Transcriber.TIMEOUT}
+            mock_gen.assert_called_once()
         finally:
             temp_path.unlink()
 
-    @patch("transcriber._load_user_dictionary", return_value=("", ""))
-    @patch("transcriber.genai.GenerativeModel")
-    @patch("transcriber.genai.configure")
-    def test_transcribe_strips_whitespace_and_tags(self, mock_configure, mock_model_class, mock_load_dict):
+    @patch("transcriber.Transcriber._create_client")
+    @patch("transcriber.Transcriber._client_list_models")
+    def test_transcribe_strips_whitespace_and_tags(self, mock_list_models, mock_create_client):
         """結果の空白とXMLタグが除去されること。"""
-        mock_model = MagicMock()
-        mock_model_class.return_value = mock_model
+        mock_create_client.return_value = MagicMock()
+        mock_list_models.return_value = [_MockModel(Transcriber.MODEL)]
+
         mock_response = MagicMock()
         mock_response.text = "  <output>結果</output>  \n"
-        mock_model.generate_content.return_value = mock_response
 
         transcriber = Transcriber(api_key="test_key")
 
@@ -178,20 +201,19 @@ class TestTranscriber:
             temp_path = Path(f.name)
 
         try:
-            result, elapsed = transcriber.transcribe(temp_path)
+            with patch.object(transcriber, "_generate_content_with_retry", return_value=mock_response):
+                result, elapsed = transcriber.transcribe(temp_path)
             assert result == "結果"
             assert isinstance(elapsed, float)
         finally:
             temp_path.unlink()
 
-    @patch("transcriber._load_user_dictionary", return_value=("", ""))
-    @patch("transcriber.genai.GenerativeModel")
-    @patch("transcriber.genai.configure")
-    def test_transcribe_api_error_returns_empty(self, mock_configure, mock_model_class, mock_load_dict, caplog):
+    @patch("transcriber.Transcriber._create_client")
+    @patch("transcriber.Transcriber._client_list_models")
+    def test_transcribe_api_error_returns_empty(self, mock_list_models, mock_create_client, caplog):
         """APIエラー時に空文字列を返すこと。"""
-        mock_model = MagicMock()
-        mock_model_class.return_value = mock_model
-        mock_model.generate_content.side_effect = RuntimeError("timeout")
+        mock_create_client.return_value = MagicMock()
+        mock_list_models.return_value = [_MockModel(Transcriber.MODEL)]
 
         transcriber = Transcriber(api_key="test_key")
 
@@ -200,8 +222,10 @@ class TestTranscriber:
             temp_path = Path(f.name)
 
         try:
-            with caplog.at_level(logging.ERROR, logger="transcriber"):
-                result, elapsed = transcriber.transcribe(temp_path)
+            with patch.object(transcriber, "_generate_content_with_retry", side_effect=RuntimeError("timeout")), \
+                 patch.object(transcriber, "_resolve_model_name", return_value=""):
+                with caplog.at_level(logging.ERROR, logger="transcriber"):
+                    result, elapsed = transcriber.transcribe(temp_path)
 
             assert result == ""
             assert isinstance(elapsed, float)
@@ -210,84 +234,86 @@ class TestTranscriber:
         finally:
             temp_path.unlink()
 
-    @patch("transcriber._load_user_dictionary", return_value=("", ""))
-    @patch("transcriber.genai.GenerativeModel")
-    @patch("transcriber.genai.configure")
-    def test_transcribe_retries_on_transient_error(self, mock_configure, mock_model_class, mock_load_dict):
+    @patch("transcriber.Transcriber._create_client")
+    @patch("transcriber.Transcriber._client_list_models")
+    def test_transcribe_retries_on_transient_error(self, mock_list_models, mock_create_client):
         """一時的なAPIエラー時に同一モデルで再試行すること。"""
-        mock_model = MagicMock()
-        mock_model_class.return_value = mock_model
-
-        recovered_response = MagicMock()
-        recovered_response.text = "再試行で復旧"
-        mock_model.generate_content.side_effect = [
-            RuntimeError("504 Deadline expired before operation could complete."),
-            recovered_response,
-        ]
+        mock_create_client.return_value = MagicMock()
+        mock_list_models.return_value = [_MockModel(Transcriber.MODEL)]
 
         transcriber = Transcriber(api_key="test_key")
+        recovered_response = MagicMock()
+
+        with patch.object(
+            transcriber,
+            "_generate_content",
+            side_effect=[RuntimeError("504 Deadline expired before operation could complete."), recovered_response],
+        ) as mock_generate:
+            result = transcriber._generate_content_with_retry(b"dummy")
+
+        assert result == recovered_response
+        assert mock_generate.call_count == 2
+
+    @patch("transcriber.Transcriber._create_client")
+    @patch("transcriber.Transcriber._client_list_models")
+    def test_generate_content_switches_to_budget0_when_thinking_level_unsupported(self, mock_list_models, mock_create_client):
+        """thinking_level 非対応時に thinking_budget=0 へ切替して再試行すること。"""
+        mock_create_client.return_value = MagicMock()
+        mock_list_models.return_value = [_MockModel(Transcriber.MODEL)]
+
+        transcriber = Transcriber(api_key="test_key")
+        recovered_response = MagicMock()
+
+        with patch.object(
+            transcriber,
+            "_generate_content",
+            side_effect=[RuntimeError("Thinking level is not supported for this model."), recovered_response],
+        ) as mock_generate:
+            result = transcriber._generate_content_with_retry(b"dummy")
+
+        assert result == recovered_response
+        assert transcriber._thinking_mode == "budget0"
+        assert mock_generate.call_count == 2
+
+    @patch("transcriber.Transcriber._create_client")
+    @patch("transcriber.Transcriber._client_list_models")
+    def test_transcribe_switches_model_on_transient_error(self, mock_list_models, mock_create_client):
+        """一時的なAPIエラーが継続する場合にモデル切替して再試行すること。"""
+        mock_create_client.return_value = MagicMock()
+        mock_list_models.return_value = [_MockModel("gemini-3-flash-preview"), _MockModel("gemini-2.5-flash")]
+
+        transcriber = Transcriber(api_key="test_key")
+        recovered_response = MagicMock()
+        recovered_response.text = "別モデルで復旧"
 
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
             f.write(b"dummy audio data")
             temp_path = Path(f.name)
 
         try:
-            result, elapsed = transcriber.transcribe(temp_path)
-            assert result == "再試行で復旧"
+            with patch.object(
+                transcriber,
+                "_generate_content_with_retry",
+                side_effect=[RuntimeError("504 Deadline expired before operation could complete."), recovered_response],
+            ) as mock_retry, patch.object(transcriber, "_resolve_model_name", return_value="gemini-2.5-flash"):
+                result, elapsed = transcriber.transcribe(temp_path)
+
+            assert result == "別モデルで復旧"
             assert isinstance(elapsed, float)
-            assert mock_model.generate_content.call_count == 2
+            assert mock_retry.call_count == 2
+            assert transcriber._model_name == "gemini-2.5-flash"
         finally:
             temp_path.unlink()
 
-    @patch("transcriber._load_user_dictionary", return_value=("", ""))
-    @patch("transcriber.genai.GenerativeModel")
-    @patch("transcriber.genai.configure")
-    def test_transcribe_switches_model_on_transient_error(self, mock_configure, mock_model_class, mock_load_dict):
-        """一時的なAPIエラーが継続する場合にモデル切替して再試行すること。"""
-        broken_model = MagicMock()
-        broken_model.generate_content.side_effect = RuntimeError(
-            "504 Deadline expired before operation could complete."
-        )
-
-        recovered_model = MagicMock()
-        recovered_response = MagicMock()
-        recovered_response.text = "別モデルで復旧"
-        recovered_model.generate_content.return_value = recovered_response
-
-        mock_model_class.side_effect = [broken_model, recovered_model]
-
-        with patch(
-            "transcriber.genai.list_models",
-            return_value=[
-                _mock_model_info("gemini-3-flash-preview"),
-                _mock_model_info("gemini-2.5-flash"),
-            ],
-        ):
-            transcriber = Transcriber(api_key="test_key")
-
-            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
-                f.write(b"dummy audio data")
-                temp_path = Path(f.name)
-
-            try:
-                result, elapsed = transcriber.transcribe(temp_path)
-                assert result == "別モデルで復旧"
-                assert isinstance(elapsed, float)
-                assert broken_model.generate_content.call_count == 2
-                assert mock_model_class.call_count == 2
-            finally:
-                temp_path.unlink()
-
-    @patch("transcriber._load_user_dictionary", return_value=("", ""))
-    @patch("transcriber.genai.GenerativeModel")
-    @patch("transcriber.genai.configure")
-    def test_transcribe_logs_result_with_gemini_label(self, mock_configure, mock_model_class, mock_load_dict, caplog):
+    @patch("transcriber.Transcriber._create_client")
+    @patch("transcriber.Transcriber._client_list_models")
+    def test_transcribe_logs_result_with_gemini_label(self, mock_list_models, mock_create_client, caplog):
         """文字起こし結果が[Gemini]ラベルでログ出力されること。"""
-        mock_model = MagicMock()
-        mock_model_class.return_value = mock_model
+        mock_create_client.return_value = MagicMock()
+        mock_list_models.return_value = [_MockModel(Transcriber.MODEL)]
+
         mock_response = MagicMock()
         mock_response.text = "テスト結果"
-        mock_model.generate_content.return_value = mock_response
 
         transcriber = Transcriber(api_key="test_key")
 
@@ -296,8 +322,9 @@ class TestTranscriber:
             temp_path = Path(f.name)
 
         try:
-            with caplog.at_level(logging.INFO, logger="transcriber"):
-                transcriber.transcribe(temp_path)
+            with patch.object(transcriber, "_generate_content_with_retry", return_value=mock_response):
+                with caplog.at_level(logging.INFO, logger="transcriber"):
+                    transcriber.transcribe(temp_path)
 
             assert any(record.message.startswith("[Gemini ") for record in caplog.records)
             assert any("テスト結果" in record.message for record in caplog.records)
@@ -305,62 +332,21 @@ class TestTranscriber:
         finally:
             temp_path.unlink()
 
-    @patch("transcriber._load_user_dictionary", return_value=("", ""))
-    @patch("transcriber.genai.GenerativeModel")
-    @patch("transcriber.genai.configure")
-    def test_transcribe_switches_model_and_retries_on_404(self, mock_configure, mock_model_class, mock_load_dict):
-        """モデル404時にモデル切替して再試行すること。"""
-        broken_model = MagicMock()
-        broken_model.generate_content.side_effect = RuntimeError(
-            "404 models/gemini-3.0-flash is not found for API version v1beta"
-        )
+    @patch("transcriber.Transcriber._create_client")
+    @patch("transcriber.Transcriber._client_list_models")
+    def test_client_generate_content_uses_prompt_and_audio_part(self, mock_list_models, mock_create_client):
+        """API呼び出し時にプロンプトと音声Partを渡すこと。"""
+        mock_client = MagicMock()
+        mock_create_client.return_value = mock_client
+        mock_list_models.return_value = [_MockModel(Transcriber.MODEL)]
 
-        recovered_model = MagicMock()
-        recovered_response = MagicMock()
-        recovered_response.text = "復旧結果"
-        recovered_model.generate_content.return_value = recovered_response
+        transcriber = Transcriber(api_key="test_key")
+        transcriber._client_generate_content(Transcriber.MODEL, b"audio-bytes")
 
-        mock_model_class.side_effect = [broken_model, recovered_model]
-
-        with patch(
-            "transcriber.genai.list_models",
-            return_value=[
-                _mock_model_info("gemini-3-flash-preview"),
-                _mock_model_info("gemini-2.5-flash"),
-            ],
-        ):
-            transcriber = Transcriber(api_key="test_key")
-
-            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
-                f.write(b"dummy audio data")
-                temp_path = Path(f.name)
-
-            try:
-                result, elapsed = transcriber.transcribe(temp_path)
-                assert result == "復旧結果"
-                assert isinstance(elapsed, float)
-                assert mock_model_class.call_count == 2
-            finally:
-                temp_path.unlink()
-
-    @patch("transcriber._load_user_dictionary")
-    @patch("transcriber.genai.GenerativeModel")
-    @patch("transcriber.genai.configure")
-    def test_init_does_not_embed_user_dictionary_in_prompt(self, mock_configure, mock_model_class, mock_load_dict):
-        """辞書セクション削除後はユーザー辞書がプロンプトに埋め込まれないこと。"""
-        mock_load_dict.return_value = (
-            '\n<category name="ユーザー辞書（変換）">\n<term japanese="クロード" english="Claude" context="always"/>\n</category>',
-            '\n<category name="ユーザー辞書（ヒント）" type="hint">\n<hint>Opus</hint>\n</category>',
-        )
-
-        Transcriber(api_key="test_key")
-
-        model_kwargs = mock_model_class.call_args.kwargs
-        system_instruction = model_kwargs["system_instruction"]
-        assert "ユーザー辞書（変換）" not in system_instruction
-        assert "ユーザー辞書（ヒント）" not in system_instruction
-        assert "クロード" not in system_instruction
-        assert "Opus" not in system_instruction
+        call_kwargs = mock_client.models.generate_content.call_args.kwargs
+        assert call_kwargs["model"] == Transcriber.MODEL
+        assert call_kwargs["contents"][0] == TRANSCRIBE_PROMPT
+        assert len(call_kwargs["contents"]) == 2
 
     def test_model_constant(self):
         """モデル定数が正しいこと。"""
