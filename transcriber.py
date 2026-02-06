@@ -35,7 +35,10 @@ class Transcriber:
     MODEL = "gemini-2.5-flash"
     MODEL_ENV_VAR = "VOICECODE_GEMINI_MODEL"
     THINKING_LEVEL_ENV_VAR = "VOICECODE_THINKING_LEVEL"
+    ENABLE_PROMPT_CACHE_ENV_VAR = "VOICECODE_ENABLE_PROMPT_CACHE"
+    PROMPT_CACHE_TTL_ENV_VAR = "VOICECODE_PROMPT_CACHE_TTL"
     DEFAULT_THINKING_LEVEL = "minimal"
+    DEFAULT_PROMPT_CACHE_TTL = "3600s"
     MODEL_ALIASES = {
         # 旧命名を受け取った場合でも実在モデルへ寄せる
         "gemini-3.0-flash": "gemini-3-flash-preview",
@@ -74,8 +77,12 @@ class Transcriber:
         self._system_prompt = self._build_system_prompt()
         self._thinking_level = self._resolve_thinking_level()
         self._thinking_mode = "level"  # level / budget0
+        self._enable_prompt_cache = self._resolve_prompt_cache_enabled()
+        self._prompt_cache_ttl = os.getenv(self.PROMPT_CACHE_TTL_ENV_VAR, self.DEFAULT_PROMPT_CACHE_TTL)
+        self._prompt_cache_name_by_model: dict[str, str] = {}
 
         self._model_name = self._resolve_model_name()
+        self._ensure_prompt_cache(self._model_name)
         logger.info(f"[Gemini] 使用モデル: {self._model_name}")
         logger.info(f"[Gemini] Thinking mode: {self._thinking_mode} ({self._thinking_level.name})")
 
@@ -99,6 +106,11 @@ class Transcriber:
             f"[Gemini] 無効な thinking level のため {self.DEFAULT_THINKING_LEVEL} を使用します: {raw_level}"
         )
         return self._THINKING_LEVEL_MAP[self.DEFAULT_THINKING_LEVEL]
+
+    def _resolve_prompt_cache_enabled(self) -> bool:
+        """プロンプトキャッシュ有効化フラグを解決する。"""
+        raw = os.getenv(self.ENABLE_PROMPT_CACHE_ENV_VAR, "true").strip().lower()
+        return raw not in {"0", "false", "off", "no"}
 
     @staticmethod
     def _extract_response_text(response: object) -> str:
@@ -236,10 +248,41 @@ class Transcriber:
             # thinking_level 非対応モデル向けフォールバック
             thinking_config = genai_types.ThinkingConfig(thinking_budget=0)
 
+        cached_content_name = self._prompt_cache_name_by_model.get(self._model_name)
+        if cached_content_name:
+            return genai_types.GenerateContentConfig(
+                cached_content=cached_content_name,
+                thinking_config=thinking_config,
+            )
+
         return genai_types.GenerateContentConfig(
             system_instruction=self._system_prompt,
             thinking_config=thinking_config,
         )
+
+    def _ensure_prompt_cache(self, model_name: str) -> None:
+        """SYSTEM_PROMPT をキャッシュし、以後 cached_content を利用する。"""
+        if not self._enable_prompt_cache:
+            return
+
+        if model_name in self._prompt_cache_name_by_model:
+            return
+
+        try:
+            cache = self._client.caches.create(
+                model=model_name,
+                config=genai_types.CreateCachedContentConfig(
+                    system_instruction=self._system_prompt,
+                    ttl=self._prompt_cache_ttl,
+                    display_name="vibescribe-system-prompt-cache",
+                ),
+            )
+            cache_name = getattr(cache, "name", "")
+            if isinstance(cache_name, str) and cache_name:
+                self._prompt_cache_name_by_model[model_name] = cache_name
+                logger.info(f"[Gemini] Prompt cache created: {cache_name} (model={model_name})")
+        except Exception as e:
+            logger.warning(f"[Gemini] Prompt cache unavailable. system_instruction fallback を使用します: {e}")
 
     def _client_generate_content(self, model: str, audio_data: bytes) -> object:
         """Gemini generate_content を呼び出す。"""
@@ -308,6 +351,7 @@ class Transcriber:
                     )
                     try:
                         self._model_name = fallback_model
+                        self._ensure_prompt_cache(self._model_name)
                         response = self._generate_content_with_retry(audio_data)
                     except Exception as retry_error:
                         elapsed = time.time() - start_time
