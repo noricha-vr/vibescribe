@@ -95,6 +95,11 @@ root_logger.addHandler(console_handler)
 root_logger.addHandler(file_handler)
 
 
+def _format_timed_log(label: str, elapsed_seconds: float, message: str) -> str:
+    """処理時間付きログを見やすい形式で整形する。"""
+    return f"[{label} {elapsed_seconds:.2f}s] {message}"
+
+
 def _ensure_api_keys(env_path: Path) -> None:
     """API キーが設定されていない場合、入力を求めて .env に保存する。
 
@@ -601,7 +606,7 @@ class VoiceCodeApp(rumps.App):
             stop_start = time.time()
             audio_path = self._recorder.stop()
             stop_time = time.time() - stop_start
-            logger.info(f"[Stop] Recording saved ({stop_time:.2f}s)")
+            logger.info(_format_timed_log("Stop", stop_time, "Recording saved"))
 
             print("\n" + "-" * 50)
             print("Processing...")
@@ -634,7 +639,7 @@ class VoiceCodeApp(rumps.App):
             with controller.pressed(keyboard.Key.cmd):
                 controller.tap('v')
             paste_time = time.time() - paste_start
-            logger.info(f"[Paste] Clipboard + paste ({paste_time:.2f}s)")
+            logger.info(_format_timed_log("Paste", paste_time, "Clipboard + paste"))
 
             # 合計時間を表示
             total_time = time.time() - total_start

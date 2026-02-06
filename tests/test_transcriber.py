@@ -299,8 +299,9 @@ class TestTranscriber:
             with caplog.at_level(logging.INFO, logger="transcriber"):
                 transcriber.transcribe(temp_path)
 
-            assert any("[Gemini]" in record.message for record in caplog.records)
+            assert any(record.message.startswith("[Gemini ") for record in caplog.records)
             assert any("テスト結果" in record.message for record in caplog.records)
+            assert any("s] " in record.message for record in caplog.records)
         finally:
             temp_path.unlink()
 

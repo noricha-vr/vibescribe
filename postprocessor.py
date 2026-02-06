@@ -324,6 +324,11 @@ Whisperは無音部分や録音終了時に、以下のような定型的なハ�
 </instructions>"""
 
 
+def _format_timed_log(label: str, elapsed_seconds: float, message: str) -> str:
+    """処理時間付きログを見やすい形式で整形する。"""
+    return f"[{label} {elapsed_seconds:.2f}s] {message}"
+
+
 def _load_user_dictionary() -> tuple[str, str]:
     """ユーザー辞書を読み込んでXML形式で返す。
 
@@ -417,5 +422,5 @@ class PostProcessor:
         start_time = time.time()
         result = re.sub(r"<[^>]+>", "", text).strip()
         elapsed = time.time() - start_time
-        logger.info(f"[PostProcess] pass-through ({elapsed:.2f}s)")
+        logger.info(_format_timed_log("PostProcess", elapsed, "pass-through"))
         return result, elapsed

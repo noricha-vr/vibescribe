@@ -23,6 +23,11 @@ TRANSCRIBE_PROMPT = (
 )
 
 
+def _format_timed_log(label: str, elapsed_seconds: float, message: str) -> str:
+    """処理時間付きログを見やすい形式で整形する。"""
+    return f"[{label} {elapsed_seconds:.2f}s] {message}"
+
+
 class Transcriber:
     """音声文字起こしクラス。"""
 
@@ -275,22 +280,42 @@ class Transcriber:
                     except Exception as retry_error:
                         elapsed = time.time() - start_time
                         logger.error(
-                            f"[Gemini] API呼び出しに失敗しました(model={self._model_name}): {retry_error} ({elapsed:.2f}s)"
+                            _format_timed_log(
+                                "Gemini",
+                                elapsed,
+                                f"API呼び出しに失敗しました(model={self._model_name}): {retry_error}",
+                            )
                         )
                         return "", elapsed
                 else:
                     elapsed = time.time() - start_time
                     logger.error(
-                        f"[Gemini] API呼び出しに失敗しました(model={self._model_name}): {e} ({elapsed:.2f}s)"
+                        _format_timed_log(
+                            "Gemini",
+                            elapsed,
+                            f"API呼び出しに失敗しました(model={self._model_name}): {e}",
+                        )
                     )
                     return "", elapsed
             else:
                 elapsed = time.time() - start_time
-                logger.error(f"[Gemini] API呼び出しに失敗しました(model={self._model_name}): {e} ({elapsed:.2f}s)")
+                logger.error(
+                    _format_timed_log(
+                        "Gemini",
+                        elapsed,
+                        f"API呼び出しに失敗しました(model={self._model_name}): {e}",
+                    )
+                )
                 return "", elapsed
 
         elapsed = time.time() - start_time
         raw_text = self._extract_response_text(response)
         result = re.sub(r"<[^>]+>", "", raw_text).strip()
-        logger.info(f"[Gemini] {result} ({elapsed:.2f}s, model={self._model_name})")
+        logger.info(
+            _format_timed_log(
+                "Gemini",
+                elapsed,
+                f"{result} (model={self._model_name})",
+            )
+        )
         return result, elapsed

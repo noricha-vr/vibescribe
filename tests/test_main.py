@@ -13,6 +13,7 @@ from main import (
     _StatusItemHelper,
     _build_signal_handler,
     _daemonize,
+    _format_timed_log,
     _format_hotkey,
     _parse_args,
     _parse_hotkey,
@@ -126,6 +127,14 @@ class TestParseHotkey:
         """スペースのみでエラーになること。"""
         with pytest.raises(ValueError, match="No valid keys found"):
             _parse_hotkey("   ")
+
+
+class TestFormatTimedLog:
+    """_format_timed_log 関数のテスト。"""
+
+    def test_format_timed_log(self):
+        """ラベル・時間・メッセージを固定形式で整形すること。"""
+        assert _format_timed_log("Stop", 1.234, "Recording saved") == "[Stop 1.23s] Recording saved"
 
 
 class TestFormatHotkey:
