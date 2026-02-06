@@ -36,7 +36,8 @@ class TestPostProcessor:
         processor = PostProcessor()
         with caplog.at_level(logging.INFO, logger="postprocessor"):
             processor.process("テスト")
-        assert any("[PostProcess]" in record.message for record in caplog.records)
+        assert any(record.message.startswith("[PostProcess ") for record in caplog.records)
+        assert any("s] pass-through" in record.message for record in caplog.records)
 
     def test_model_constants(self):
         """互換クラスの定数が定義されていること。"""
@@ -47,7 +48,7 @@ class TestPostProcessor:
     def test_system_prompt_still_available(self):
         """Transcriber で再利用するため SYSTEM_PROMPT を保持していること。"""
         assert "<instructions>" in SYSTEM_PROMPT
-        assert "<terminology>" in SYSTEM_PROMPT
+        assert "<terminology>" not in SYSTEM_PROMPT
 
 
 class TestLoadUserDictionary:

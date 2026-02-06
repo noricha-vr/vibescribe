@@ -7,6 +7,7 @@
 """
 
 import argparse
+import signal
 import sys
 
 if sys.platform != "darwin":
@@ -92,6 +93,11 @@ root_logger = logging.getLogger()
 root_logger.setLevel(logging.DEBUG)
 root_logger.addHandler(console_handler)
 root_logger.addHandler(file_handler)
+
+
+def _format_timed_log(label: str, elapsed_seconds: float, message: str) -> str:
+    """処理時間付きログを見やすい形式で整形する。"""
+    return f"[{label} {elapsed_seconds:.2f}s] {message}"
 
 
 def _ensure_api_keys(env_path: Path) -> None:
@@ -600,7 +606,7 @@ class VoiceCodeApp(rumps.App):
             stop_start = time.time()
             audio_path = self._recorder.stop()
             stop_time = time.time() - stop_start
-            logger.info(f"[Stop] Recording saved ({stop_time:.2f}s)")
+            logger.info(_format_timed_log("Stop", stop_time, "Recording saved"))
 
             print("\n" + "-" * 50)
             print("Processing...")
@@ -633,7 +639,7 @@ class VoiceCodeApp(rumps.App):
             with controller.pressed(keyboard.Key.cmd):
                 controller.tap('v')
             paste_time = time.time() - paste_start
-            logger.info(f"[Paste] Clipboard + paste ({paste_time:.2f}s)")
+            logger.info(_format_timed_log("Paste", paste_time, "Clipboard + paste"))
 
             # 合計時間を表示
             total_time = time.time() - total_start
@@ -770,6 +776,40 @@ def _parse_args() -> argparse.Namespace:
     return args
 
 
+def _build_signal_handler(app: VoiceCodeApp):
+    """終了シグナル受信時のハンドラを生成する。"""
+
+    def _handle_signal(signum, _frame) -> None:
+        signal_name = signal.Signals(signum).name if signum in signal.Signals._value2member_map_ else str(signum)
+        print(f"\n[Info] Received {signal_name}. Shutting down...")
+
+        # バックグラウンド処理を先に停止してからアプリを終了する
+        if hasattr(app, "_timeout_timer"):
+            try:
+                app._timeout_timer.stop()
+            except Exception:
+                pass
+
+        if hasattr(app, "_listener"):
+            try:
+                app._listener.stop()
+            except Exception:
+                pass
+
+        if hasattr(app, "_overlay"):
+            try:
+                app._overlay.hide()
+            except Exception:
+                pass
+
+        try:
+            rumps.quit_application()
+        except Exception:
+            pass
+
+    return _handle_signal
+
+
 def main() -> None:
     """エントリポイント。"""
     args = _parse_args()
@@ -778,6 +818,9 @@ def main() -> None:
         _daemonize()
 
     app = VoiceCodeApp()
+    signal_handler = _build_signal_handler(app)
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
     app.run()
 
 

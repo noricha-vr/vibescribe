@@ -249,79 +249,12 @@ Whisperは無音部分や録音終了時に、以下のような定型的なハ�
 <explanation>文脈に沿った正当な感謝表現。「修正」に対する感謝なのでハルシネーションではない</explanation>
 </example>
 </examples>
-
-<terminology>
-<category name="フレームワーク・ライブラリ">
-<term japanese="リアクト" english="React" context="always"/>
-<term japanese="ネクストJS,ネクスト" english="Next.js" context="programming"/>
-<term japanese="ビューJS,ビュー" english="Vue.js" context="programming"/>
-<term japanese="すべると,スベルト" english="Svelte" context="always"/>
-<term japanese="アンギュラー" english="Angular" context="always"/>
-<term japanese="ジャンゴ" english="Django" context="always"/>
-<term japanese="フラスク" english="Flask" context="always"/>
-<term japanese="エクスプレス" english="Express" context="programming"/>
-</category>
-
-<category name="言語・ランタイム">
-<term japanese="タイプスクリプト" english="TypeScript" context="always"/>
-<term japanese="ジャバスクリプト" english="JavaScript" context="always"/>
-<term japanese="パイソン" english="Python" context="always"/>
-<term japanese="ノードJS,ノード" english="Node.js" context="programming"/>
-</category>
-
-<category name="React Hooks">
-<term japanese="ユースステート" english="useState" context="always"/>
-<term japanese="ユースエフェクト" english="useEffect" context="always"/>
-<term japanese="ユースコンテキスト" english="useContext" context="always"/>
-<term japanese="ユースリデューサー" english="useReducer" context="always"/>
-<term japanese="ユースメモ" english="useMemo" context="always"/>
-<term japanese="ユースコールバック" english="useCallback" context="always"/>
-<term japanese="ユースレフ" english="useRef" context="always"/>
-</category>
-
-<category name="データベース">
-<term japanese="モンゴDB" english="MongoDB" context="always"/>
-<term japanese="ポストグレス,ポストグレ" english="PostgreSQL" context="always"/>
-<term japanese="マイエスキューエル" english="MySQL" context="always"/>
-</category>
-
-<category name="インフラ・ツール">
-<term japanese="ドッカー" english="Docker" context="always"/>
-<term japanese="クバネティス,クーバネティス" english="Kubernetes" context="always"/>
-<term japanese="ギットハブ" english="GitHub" context="always"/>
-<term japanese="ギット" english="Git" context="programming"/>
-</category>
-
-<category name="クラウド">
-<term japanese="エーダブリューエス" english="AWS" context="always"/>
-<term japanese="ジーシーピー" english="GCP" context="always"/>
-<term japanese="アジュール" english="Azure" context="always"/>
-</category>
-
-<category name="プロトコル・形式">
-<term japanese="エーピーアイ" english="API" context="always"/>
-<term japanese="ジェイソン" english="JSON" context="always"/>
-<term japanese="エイチティーエムエル" english="HTML" context="always"/>
-<term japanese="シーエスエス" english="CSS" context="always"/>
-<term japanese="エスキューエル" english="SQL" context="always"/>
-<term japanese="レスト" english="REST" context="programming"/>
-<term japanese="グラフキューエル" english="GraphQL" context="always"/>
-<term japanese="ウェブソケット" english="WebSocket" context="always"/>
-</category>
-
-<category name="AI・LLM">
-<term japanese="クロード" english="Claude" context="always"/>
-<term japanese="ジーピーティー" english="GPT" context="always"/>
-<term japanese="オープンエーアイ" english="OpenAI" context="always"/>
-</category>
-
-<category name="その他">
-<term japanese="コンポーネント" english="component" context="programming"/>
-<term japanese="プロップス" english="props" context="programming"/>
-<term japanese="ステート" english="state" context="programming"/>
-</category>
-</terminology>
 </instructions>"""
+
+
+def _format_timed_log(label: str, elapsed_seconds: float, message: str) -> str:
+    """処理時間付きログを見やすい形式で整形する。"""
+    return f"[{label} {elapsed_seconds:.2f}s] {message}"
 
 
 def _load_user_dictionary() -> tuple[str, str]:
@@ -417,5 +350,5 @@ class PostProcessor:
         start_time = time.time()
         result = re.sub(r"<[^>]+>", "", text).strip()
         elapsed = time.time() - start_time
-        logger.info(f"[PostProcess] pass-through ({elapsed:.2f}s)")
+        logger.info(_format_timed_log("PostProcess", elapsed, "pass-through"))
         return result, elapsed
