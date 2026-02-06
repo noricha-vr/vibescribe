@@ -106,111 +106,46 @@ Whisperは無音部分や録音終了時に、以下のような定型的なハ�
 <explanation>「変感」は音声認識の誤変換、正しくは「変換」</explanation>
 </example>
 
-<example name="同音異義語修正">
-<input>変数を書くと動く</input>
-<output>変数を書くと動く</output>
-<explanation>「描く」ではなく「書く」が正しい（プログラミング文脈）</explanation>
-</example>
-
 <example name="助詞修正">
 <input>APIが呼び出す</input>
 <output>APIを呼び出す</output>
 <explanation>「が」は助詞の誤り、「を」が正しい</explanation>
 </example>
 
-<example name="同音異義語修正（上記/蒸気）">
+<example name="同音異義語（最小辞書: 上記/蒸気）">
 <input>蒸気のコードを参考にしてください</input>
 <output>上記のコードを参考にしてください</output>
-<explanation>プログラミング文脈で「コードを参考」なら「上記」が正しい</explanation>
+<explanation>「コードを参考」の文脈では「上記」が高確率で正しい</explanation>
 </example>
 
-<example name="同音異義語修正（機能/昨日）">
+<example name="同音異義語（最小辞書: 機能/昨日）">
 <input>昨日を実装する</input>
 <output>機能を実装する</output>
-<explanation>「実装する」があるのでプログラミング文脈、「機能」が正しい</explanation>
+<explanation>「実装する」の目的語は「機能」が自然</explanation>
 </example>
 
-<example name="同音異義語修正（構成/校正）">
-<input>ファイル校正を確認する</input>
-<output>ファイル構成を確認する</output>
-<explanation>プログラミング文脈で「ファイル」と組み合わせなら「構成」が正しい</explanation>
-</example>
-
-<example name="同音異義語修正（仕様/使用）">
+<example name="同音異義語（最小辞書: 仕様/使用）">
 <input>APIの使用を確認する</input>
 <output>APIの仕様を確認する</output>
-<explanation>「確認する」対象として「API」があれば「仕様」が正しい</explanation>
+<explanation>「APIの〜を確認する」は「仕様」が高頻度</explanation>
 </example>
 
-<example name="同音異義語修正（使用/仕様）">
+<example name="同音異義語（最小辞書: 使用/仕様）">
 <input>このライブラリを仕様する</input>
 <output>このライブラリを使用する</output>
-<explanation>「〜を○○する」の形で動詞として使われているなら「使用」が正しい</explanation>
+<explanation>「〜を○○する」の動詞は「使用」が自然</explanation>
 </example>
 
-<example name="同音異義語修正（各/書く）">
-<input>書くステップの処理時間を表示する</input>
-<output>各ステップの処理時間を表示する</output>
-<explanation>「書く＋名詞」の形で「各〜」の意味なら「各」が正しい</explanation>
-</example>
-
-<example name="同音異義語修正（.env/演武）">
-<input>演武ファイルの使い方について説明してください</input>
-<output>.envファイルの使い方について説明してください。</output>
-<explanation>プログラミング文脈で「ファイル」と組み合わせなら環境変数ファイル「.env」が正しい</explanation>
-</example>
-<example name="同音異義語修正（化して/貸して）">
-<input>ドキュメント貸してください</input>
-<output>ドキュメント化してください</output>
-<explanation>「ドキュメント」と組み合わせる場合、「化して」（ドキュメント化する）が正しい</explanation>
-</example>
-
-<example name="同音異義語修正（Revision/Rebase）">
-<input>Revisionは最新版を使用しています。</input>
-<output>Revisionは最新版を使用しています。</output>
-<explanation>「Revision」（リビジョン、バージョン番号）を「Rebase」（Gitのリベース操作）に変換しない。文脈から「バージョン」の意味で使われている。</explanation>
-</example>
-
-<example name="同音異義語修正（Issue/実習）">
-<input>実習が立っているか確認してください</input>
-<output>Issueが立っているか確認してください</output>
-<explanation>プログラミング文脈で「立っている」と組み合わせる場合、GitHubの「Issue」が正しい</explanation>
-</example>
-
-<example name="同音異義語修正（改行/開業）">
+<example name="同音異義語（最小辞書: 改行/開業）">
 <input>開業された文章を貼り付けると圧縮されてしまう</input>
 <output>改行された文章を貼り付けると圧縮されてしまう</output>
-<explanation>プログラミング文脈で「文章」「貼り付け」と組み合わせる場合、「改行」が正しい</explanation>
+<explanation>「文章」「貼り付け」の文脈では「改行」が高頻度</explanation>
 </example>
 
-<example name="同音異義語修正（レビュアー/リビジョン）">
-<input>変更が終わったらリビジョンエージェントで確認してください</input>
-<output>変更が終わったらレビュアーエージェントで確認してください</output>
-<explanation>「確認してください」と組み合わせる場合、コードレビューを行う「レビュアー」が正しい。「リビジョン」はバージョン番号の意味。</explanation>
-</example>
-
-<example name="同音異義語修正（Slug/Slack）">
-<input>Slackが登録されたテストが登録されていなければ、新たにテストを作成してください</input>
-<output>Slugが登録されたテストが登録されていなければ、新たにテストを作成してください</output>
-<explanation>「テスト」「登録」と組み合わせる場合、URLスラッグの「Slug」が正しい。「Slack」はチャットツール。</explanation>
-</example>
-
-<example name="同音異義語修正（改行/開業）追加パターン">
-<input>3行以内であれば積極的に開業を利用する</input>
-<output>3行以内であれば積極的に改行を利用する</output>
-<explanation>プログラミング文脈で「行」「利用する」と組み合わせる場合、事業の「開業」ではなく「改行」が正しい</explanation>
-</example>
-
-<example name="同音異義語修正（再生成/再生性）">
-<input>画像の再生性ボタンというものは存在しますか</input>
-<output>画像の再生成ボタンというものは存在しますか</output>
-<explanation>「再生性」という単語は一般的でなく、画像やコンテンツの文脈では「再生成」（もう一度生成する）が正しい</explanation>
-</example>
-
-<example name="同音異義語修正（記事/生地）">
-<input>ブログの生地を作成してください</input>
-<output>ブログの記事を作成してください</output>
-<explanation>「ブログ」「作成」と組み合わせる場合、布の「生地」ではなくコンテンツの「記事」が正しい</explanation>
+<example name="同音異義語（最小辞書: .env/演武）">
+<input>演武ファイルの使い方について説明してください</input>
+<output>.envファイルの使い方について説明してください。</output>
+<explanation>開発文脈で「演武ファイル」はほぼ「.envファイル」の誤認識</explanation>
 </example>
 
 <example type="hallucination" name="ハルシネーション除去（単独）">
