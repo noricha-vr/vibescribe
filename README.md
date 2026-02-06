@@ -271,6 +271,21 @@ voicecode/
 - 静かな環境で使用する
 - はっきりと発音する
 
+## 既知の課題（2026-02-06時点）
+
+- **文字起こしの待ち時間が長いことがある**
+  - 実測では `gemini-3-flash-preview` で約5〜9秒、`504 Deadline expired` の再試行時は10秒超になるケースあり
+  - 処理内訳では `Stop/Paste/PostProcess` は軽量で、ボトルネックは Gemini API 呼び出し
+
+- **Reasoning / Thinking Level の直接制御が未対応**
+  - 現在の実装は `google.generativeai` (`0.8.6`) を使用
+  - このSDKでは `thinking_level=minimal` などの設定を `generation_config` に渡せない
+  - Thinking制御には `google.genai` への移行が必要
+
+- **ログファイルの肥大化**
+  - ログは `~/.voicecode/voicecode.log` に追記され続けるため、長期運用で数GBまで増える
+  - ログローテーション（例: `RotatingFileHandler`）が未実装
+
 ## 注意事項
 
 - 録音は最大120秒で自動停止します（設定で10-300秒に変更可能）
