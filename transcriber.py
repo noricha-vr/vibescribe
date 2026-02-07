@@ -238,6 +238,14 @@ class Transcriber:
         message = str(error).lower()
         return "thinking level is not supported" in message
 
+    @staticmethod
+    def _is_cached_content_error(error: Exception) -> bool:
+        """CachedContent が見つからない/権限エラーかどうか判定する。"""
+        message = str(error).lower()
+        return "cachedcontent not found" in message or (
+            "permission_denied" in message and "cached" in message
+        )
+
     def _build_generate_config(self) -> genai_types.GenerateContentConfig:
         """generate_content 用の設定を組み立てる。"""
         if self._thinking_mode == "level":
@@ -301,6 +309,20 @@ class Transcriber:
 
     def _generate_content_with_retry(self, audio_data: bytes) -> object:
         """一時的なAPIエラー時に短いリトライを行う。"""
+        # キャッシュエラーは1回だけリカバリ（リトライカウンタを消費しない）
+        try:
+            return self._retry_loop(audio_data)
+        except Exception as e:
+            if not self._is_cached_content_error(e):
+                raise
+            logger.warning(
+                f"[Gemini] CachedContent が無効なためキャッシュなしで再試行します (model={self._model_name})"
+            )
+            self._prompt_cache_name_by_model.pop(self._model_name, None)
+            return self._retry_loop(audio_data)
+
+    def _retry_loop(self, audio_data: bytes) -> object:
+        """リトライループの実体。"""
         last_error: Exception | None = None
         for attempt in range(self.MAX_TRANSIENT_RETRIES + 1):
             try:
