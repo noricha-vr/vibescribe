@@ -355,3 +355,105 @@ class TestTranscriber:
     def test_timeout_constant(self):
         """タイムアウト定数が正しいこと。"""
         assert Transcriber.TIMEOUT == 10.0
+
+    @pytest.mark.parametrize(
+        "message,expected",
+        [
+            ("403 PERMISSION_DENIED: CachedContent not found", True),
+            ("CachedContent not found for API version v1beta", True),
+            ("PERMISSION_DENIED: cached content expired", True),
+            ("permission_denied something about cached resource", True),
+            ("404 model not found", False),
+            ("500 internal server error", False),
+            ("PERMISSION_DENIED: quota exceeded", False),
+        ],
+    )
+    def test_is_cached_content_error_patterns(self, message, expected):
+        """各エラーパターンの CachedContent エラー検出が正しいこと。"""
+        error = RuntimeError(message)
+        assert Transcriber._is_cached_content_error(error) is expected
+
+    @patch("transcriber.Transcriber._create_client")
+    @patch("transcriber.Transcriber._client_list_models")
+    def test_cached_content_error_fallback_to_system_instruction(self, mock_list_models, mock_create_client):
+        """キャッシュ 403 エラー時にキャッシュを無効化してリトライすること。"""
+        mock_create_client.return_value = MagicMock()
+        mock_list_models.return_value = [_MockModel(Transcriber.MODEL)]
+
+        transcriber = Transcriber(api_key="test_key")
+        transcriber._prompt_cache_name_by_model[transcriber._model_name] = "cachedContents/abc123"
+
+        recovered_response = MagicMock()
+
+        with patch.object(
+            transcriber,
+            "_retry_loop",
+            side_effect=[
+                RuntimeError("403 PERMISSION_DENIED: CachedContent not found"),
+                recovered_response,
+            ],
+        ) as mock_retry:
+            result = transcriber._generate_content_with_retry(b"dummy")
+
+        assert result == recovered_response
+        assert mock_retry.call_count == 2
+        # キャッシュが削除されていること
+        assert transcriber._model_name not in transcriber._prompt_cache_name_by_model
+
+    @patch("transcriber.Transcriber._create_client")
+    @patch("transcriber.Transcriber._client_list_models")
+    def test_cached_content_error_then_transient_error_retries(self, mock_list_models, mock_create_client):
+        """キャッシュエラー後に一時エラーが発生してもリトライされること。"""
+        mock_create_client.return_value = MagicMock()
+        mock_list_models.return_value = [_MockModel(Transcriber.MODEL)]
+
+        transcriber = Transcriber(api_key="test_key")
+        transcriber._prompt_cache_name_by_model[transcriber._model_name] = "cachedContents/abc123"
+
+        recovered_response = MagicMock()
+
+        # 1回目の _retry_loop: キャッシュエラーで失敗
+        # 2回目の _retry_loop: 成功（内部で transient エラーのリトライが効く）
+        with patch.object(
+            transcriber,
+            "_retry_loop",
+            side_effect=[
+                RuntimeError("403 PERMISSION_DENIED: CachedContent not found"),
+                recovered_response,
+            ],
+        ) as mock_retry:
+            result = transcriber._generate_content_with_retry(b"dummy")
+
+        assert result == recovered_response
+        assert mock_retry.call_count == 2
+        assert transcriber._model_name not in transcriber._prompt_cache_name_by_model
+
+    @patch("transcriber.Transcriber._create_client")
+    @patch("transcriber.Transcriber._client_list_models")
+    def test_cached_content_error_then_transient_error_uses_full_retry(self, mock_list_models, mock_create_client):
+        """キャッシュエラー後の _retry_loop が transient エラーをリトライできること。"""
+        mock_create_client.return_value = MagicMock()
+        mock_list_models.return_value = [_MockModel(Transcriber.MODEL)]
+
+        transcriber = Transcriber(api_key="test_key")
+        transcriber._prompt_cache_name_by_model[transcriber._model_name] = "cachedContents/abc123"
+
+        recovered_response = MagicMock()
+
+        # _generate_content をモックして完全なフローをテスト
+        with patch.object(
+            transcriber,
+            "_generate_content",
+            side_effect=[
+                # 1回目の _retry_loop 内: キャッシュエラー
+                RuntimeError("403 PERMISSION_DENIED: CachedContent not found"),
+                # 2回目の _retry_loop 内: 504 → リトライ → 成功
+                RuntimeError("504 Deadline expired"),
+                recovered_response,
+            ],
+        ) as mock_generate:
+            result = transcriber._generate_content_with_retry(b"dummy")
+
+        assert result == recovered_response
+        assert mock_generate.call_count == 3
+        assert transcriber._model_name not in transcriber._prompt_cache_name_by_model
